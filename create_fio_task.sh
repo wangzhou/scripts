@@ -42,5 +42,5 @@ done
 
 echo "Creat $1_$2_depth$3_fiotest file successfully"
 
-chmod +x fio
+#chmod +x fio
 fio $1_$2_depth$3_fiotest
