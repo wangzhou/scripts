@@ -24,7 +24,7 @@ touch ./$REPORT
 
 for DIR in ${!card_array[@]}
 do
-        #echo `cut -d "_" -f 2 $DIR` >> ./$REPORT
+        echo `cut -d "_" -f 2 $DIR` >> ./$REPORT
         echo $DIR >> ./$REPORT
         echo "" >> ./$REPORT
 
