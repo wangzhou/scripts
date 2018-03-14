@@ -8,4 +8,3 @@ rsync -avz -e "ssh -p 221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev
 
 rsync -avz -e "ssh -p 221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" --progress /home/sherlock/Mail/ wangzhou@114.119.4.74:/home/wangzhou/backup/Mail --delete
 
-rsync -avz -e "ssh -p 221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" --progress /home/sherlock/repos/kernel-pegas/ wangzhou@114.119.4.74:/home/wangzhou/repos/kernel-pegas --delete
