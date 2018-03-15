@@ -19,10 +19,11 @@ tac /tmp/commit_id_r > /tmp/commit_id
 i=0
 for line in `cat /tmp/commit_id`
 do
+	prefix=`printf "%04d" "$i"`
         git checkout $line
-        git format-patch -1 --stdout > ./$i.patch
+        git format-patch -1 --stdout > ./$prefix.patch
 	let i=i+1
 done
 
 git checkout $BRANCH
-rm /tmp/patch /tmp/commit_id /tmp/patch_tmp /tmp/commit_id_r
+rm /tmp/patch /tmp/commit_id /tmp/commit_id_r
