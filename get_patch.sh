@@ -15,12 +15,13 @@ let last_commit_1=last_commit+1
 sed -i "$last_commit_1",'$d' /tmp/patch
 cut -d ' ' -f 1 /tmp/patch > /tmp/commit_id
 
+i=0
 for line in `cat /tmp/commit_id`
 do
         git checkout $line
-        git format-patch -1 >> /tmp/patches
+        git format-patch -1 --stdout > ./$i.patch
+	let i=i+1
 done
 
 git checkout $BRANCH
-cp /tmp/patches ./
-rm /tmp/patch /tmp/commit_id /tmp/patches
+rm /tmp/patch /tmp/commit_id
