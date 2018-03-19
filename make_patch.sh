@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -vx
 
 # This script helps to pick patches from the git repo, and
 # then add some info to each patch, then apply the patches
@@ -13,9 +13,26 @@
 #               $1 -> commit id zzz
 #
 # $3: origin repo
-# $4: target repo
+# $4: target repo (can be same with $3)
 # $5: origin branch
 # $6: target branch
+# $7: bugzilla ID
+# $8: brew task ID
+#
+# .e.g you want to backport commit a/b/c from origin branch to target branch
+#
+#   origin branch:    target branch:
+#
+#      a   <- $2          a'   
+#      |                  |
+#      v                  v
+#      b                  b'
+#      |    backport      |
+#      v    ========>     v
+#      c                  c'
+#      |                  |
+#      v                  v
+#      d   <- $1          e
 
 FIRST_COMMIT=$1
 LAST_COMMIT=$2
@@ -23,7 +40,8 @@ ORIGIN_REPO=$3
 TARGET_REPO=$4
 ORIGIN_BRANCH=$5
 TARGET_BRANCH=$6
-COMMIT_ID
+BZ_ID=$7
+BREW_ID=$8
 
 mkdir -p /tmp/patches
 
@@ -37,16 +55,21 @@ mv `git format-patch $FIRST_COMMIT` /tmp/patches
 
 cd /tmp/patches
 
+echo "" > /tmp/commit_msg
+echo "Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=${BZ_ID}" >> /tmp/commit_msg
+echo "Build-Info: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=${BREW_ID}" >> /tmp/commit_msg
+echo "git $URL" >> /tmp/commit_msg
+
 for file in `ls *.patch`
 do
-	sed -i '1i \\n' file
-	sed -i '1i commit: `head -1 file | cut -d ' ' -f 2`' file
-	sed -i '1i \\n' file
-	sed -i '1i git: URL' file
+	echo "commit `head -1 $file | cut -d ' ' -f 2`" >> /tmp/commit_msg
+	sed -i '/Subject/r /tmp/commit_msg' $file
+	sed -i '/commit/d' /tmp/commit_msg
 done
 
 cd $TARGET_REPO
 git checkout $TARGET_BRANCH
-git am /tmp/patches/*.patch
+git am -s /tmp/patches/*.patch
 
 rm -r /tmp/patches
+rm /tmp/commit_msg
