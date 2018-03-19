@@ -1,5 +1,5 @@
-#!/bin/bash -vx
-
+#!/bin/bash
+#
 # This script helps to pick patches from the git repo, and
 # then add some info to each patch, then apply the patches
 # to target git repo
@@ -45,7 +45,6 @@ BREW_ID=$8
 
 mkdir -p /tmp/patches
 
-
 cd $ORIGIN_REPO
 URL=`git config -l | grep url | cut -d = -f 2`
 
@@ -84,3 +83,5 @@ rm -r /tmp/patches
 rm /tmp/commit_msg
 cd $ORIGIN_REPO
 git checkout $ORIGIN_BRANCH
+cd $TARGET_REPO
+git checkout $TARGET_BRANCH
