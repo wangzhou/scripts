@@ -63,7 +63,16 @@ echo "git $URL" >> /tmp/commit_msg
 for file in `ls *.patch`
 do
 	echo "commit `head -1 $file | cut -d ' ' -f 2`" >> /tmp/commit_msg
-	sed -i '/Subject/r /tmp/commit_msg' $file
+
+	SUBJECT_NUM=`grep -n "Subject" $file | cut -d : -f 1`
+	let NEXT_LINE=SUBJECT_NUM+1
+
+	if [ -z `sed -n ${NEXT_LINE}p $file` ]; then
+		sed -i "${SUBJECT_NUM} r /tmp/commit_msg" $file
+	else
+		sed -i "${NEXT_LINE} r /tmp/commit_msg" $file
+	fi
+
 	sed -i '/commit/d' /tmp/commit_msg
 done
 
@@ -73,3 +82,5 @@ git am -s /tmp/patches/*.patch
 
 rm -r /tmp/patches
 rm /tmp/commit_msg
+cd $ORIGIN_REPO
+git checkout $ORIGIN_BRANCH
