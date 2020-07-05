@@ -1,3 +1,3 @@
 #!/bin/bash
 
-ssh -p 222 wangzhou@114.119.4.74
+ssh -p 222 wangzhou@120.133.139.157
