@@ -1,0 +1,198 @@
+#!/bin/bash -e
+
+#
+# There're three user defined configurations in this scripts.
+# ${WORKSPACE} is the parent directory of all git repositories.
+# If any repo is missed, the building process won't be started.
+#
+# ${INSTALL_IN_USR_DIR} is the directory that binaries and libraies
+# are installed.
+# If user wants to install them into system directory, just comment
+# ${INSTALL_IN_USR_DIR}.
+#
+# ${BUILD_DEPENDENCY} controls whether to build those dependent repos.
+# If user just wants to build TENGINE repo, comment ${BUILD_DEPENDENCY}.
+# If user wants to rebuild one or more repos, uncomment ${BUILD_DEPENDENCY}.
+#
+
+WORKSPACE=/home/hzhuang1		# parent directory of git repositories
+INSTALL_IN_USR_DIR=/home/hzhuang1	# parent directory of installed files
+BUILD_DEPENDENCY=1			# Prepare UADK, OpenSSL & OpenSSL-UADK
+
+# Relative path (Don't change them.)
+LIB_DIR=usr/local/lib
+INC_DIR=usr/local/include
+BIN_DIR=usr/local/bin
+
+# These two configurations are only valid when ${BUILD_DEPENDENCY} is commented.
+DEF_UADK_MODE=dynamic
+DEF_UADK_VER=v2
+
+check_repo() {
+	if [ ! -d "${WORKSPACE}/openssl" ] || \
+	   [ ! -d "${WORKSPACE}/uadk" ] || \
+	   [ ! -d "${WORKSPACE}/openssl-uadk" ] || \
+	   [ ! -d "${WORKSPACE}/nginx" ] || \
+	   [ ! -d "${WORKSPACE}/tengine-2.2.2" ]; then
+		echo "Not all necessary repos are ready."
+		exit
+	fi
+}
+
+# arg1: dynamic or static
+# arg2: v1 or v2
+build_uadk() {
+	# Check arg1 and arg2
+	case $1 in
+	"dynamic")
+		UADK_CONF="--disable-static --enable-shared"
+		UADK_MODE=dynamic
+		;;
+	"static")
+		UADK_CONF="--enable-static --disable-shared --with-static_drv"
+		UADK_MODE=static
+		;;
+	*)
+		echo "Invalid mode parameter of build_uadk(): $1"
+		exit
+		;;
+	esac
+	case $2 in
+	"v1")
+		UADK_CONF="${UADK_CONF} --with-uadk_v1"
+		UADK_VER=v1
+		;;
+	"v2")
+		UADK_VER=v2
+		;;
+	*)
+		echo "Invalid version parameter of build_uadk(): $2"
+		exit
+		;;
+	esac
+
+	if [ ${INSTALL_IN_USR_DIR} ]; then
+		LIB_ROOT=${INSTALL_IN_USR_DIR}/uadk-${UADK_MODE}-${UADK_VER}
+		RUN_INSTALL="make install"
+	else
+		LIB_ROOT=/
+		RUN_INSTALL="sudo make install"
+	fi
+
+	# Clean build
+	rm -fr ${LIB_ROOT}
+	mkdir -p ${LIB_ROOT}
+
+	# Build UADK
+	cd ${WORKSPACE}/uadk
+	./cleanup.sh
+	./autogen.sh
+	./configure \
+	  --host aarch64-linux-gnu \
+	  --target aarch64-linux-gnu \
+	  --prefix=${LIB_ROOT}/usr/local \
+	  --includedir=${LIB_ROOT}/${INC_DIR}/uadk \
+	  ${UADK_CONF}
+	make
+	if [[ ${UADK_VER} == "v1" ]]; then
+		${RUN_INSTALL} DESTDIR=${LIB_ROOT}
+	else
+		# already specified in prefix
+		${RUN_INSTALL}
+	fi
+
+	# This test case is only available in UADK v2.
+	if [[ ${UADK_VER} == "v2" ]]; then
+		sudo \
+		  LD_LIBRARY_PATH=${LIB_ROOT}/${LIB_DIR} \
+		  PATH=${LIB_ROOT}/${BIN_DIR}:${PATH}  \
+		  C_INCLUDE_PATH=${LIB_ROOT}/${INC_DIR} \
+		  ${WORKSPACE}/uadk/test/sanity_test.sh
+	fi
+}
+
+# Start to build.
+check_repo
+
+if [ ${BUILD_DEPENDENCY} ]; then
+	# Build UADK for all different versions.
+	build_uadk static v1
+	# Disable to build dynamic v1. Since it fails to find the shared
+	# libraries when install them into user directory.
+	#build_uadk dynamic v1
+	build_uadk static v2
+	build_uadk dynamic v2
+
+	# Need dynamic and version 2 for OpenSSL
+	if [[ ${UADK_MODE} != "dynamic" ]]; then
+		echo "Specify wrong UADK mode to build with OpenSSL: ${UADK_MODE}"
+		exit
+	fi
+	if [[ ${UADK_VER} != "v2" ]]; then
+		echo "Specify wrong UADK version to build with OpenSSL: ${UADK_VER}"
+		exit
+	fi
+
+
+	# Build OpenSSL
+	cd ${WORKSPACE}/openssl
+	if [ -f Makefile ]; then
+		make distclean
+	fi
+	./config --prefix=${LIB_ROOT}/usr/local
+	make
+	${RUN_INSTALL}
+
+
+	# Build OpenSSL-UADK
+	cd ${WORKSPACE}/openssl-uadk
+	if [ -f Makefile ]; then
+		make distclean
+	fi
+	autoreconf -i
+	./configure --prefix=${LIB_ROOT}/usr/local --libdir=${LIB_ROOT}/${LIB_DIR}/engines-1.1/
+
+	LD_LIBRARY_PATH=${LIB_ROOT}/${LIB_DIR}:${LIB_ROOT}/${LIB_DIR}/engines-1.1/ \
+	  make
+	${RUN_INSTALL}
+
+	# Verify UADK engine in OpenSSL
+	sudo \
+	  LD_LIBRARY_PATH=${LIB_ROOT}/${LIB_DIR}:${LIB_ROOT}/${LIB_DIR}/engines-1.1 \
+	  PATH=${LIB_ROOT}/${BIN_DIR}/:${PATH} \
+	  C_INCLUDE_PATH=${LIB_ROOT}/${INC_DIR}/ \
+	  openssl engine -t uadk
+
+
+	# Build NGINX
+	cd ${WORKSPACE}/nginx
+	if [ -f Makefile ]; then
+		make clean
+	fi
+
+	./configure --prefix=${LIB_ROOT}/usr/local/nginx --with-http_ssl_module --with-debug
+	LD_LIBRARY_PATH=${LIB_ROOT}/${LIB_DIR} \
+	  make
+	${RUN_INSTALL}
+fi
+
+# If ${BUILD_DEPENDENCY} isn't defined
+if [ ! ${LIB_ROOT} ]; then
+	LIB_ROOT=${INSTALL_IN_USR_DIR}/uadk-${DEF_UADK_MODE}-${DEF_UADK_VER}
+	RUN_INSTALL="make install"
+fi
+
+# Build TENGINE
+cd ${WORKSPACE}/tengine-2.2.2
+if [ -f Makefile ]; then
+	make clean
+fi
+./configure \
+  --prefix=${LIB_ROOT}/usr/local/tengine-nginx \
+  --with-http_ssl_module \
+  --with-openssl-async \
+  --with-debug
+LD_LIBRARY_PATH=${LIB_ROOT}/${LIB_DIR} \
+  make
+${RUN_INSTALL}
+
