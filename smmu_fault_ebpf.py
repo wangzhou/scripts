@@ -11,7 +11,7 @@ def usage():
         exit()
 
 # arguments
-interval = 5
+interval = 500
 count = -1
 if len(argv) > 1:
         try:
@@ -33,9 +33,10 @@ BPF_HISTOGRAM(dist);
 TRACEPOINT_PROBE(smmu, io_fault_entry)
 {
         u64 ts;
+	u64 va = args->va;
 
-        ts = bpf_ktime_get_ns();
-        start.update((unsigned int *)args->pasid, &ts);
+	ts = bpf_ktime_get_ns();
+        start.update(&va, &ts);
 
         return 0;
 }
@@ -43,14 +44,14 @@ TRACEPOINT_PROBE(smmu, io_fault_entry)
 TRACEPOINT_PROBE(smmu, io_fault_exit)
 {
         u64 *tsp, delta;
-        u64 pasid;
+	u64 va = args->va;
 
-        tsp = start.lookup((unsigned int *)args->pasid);
+        tsp = start.lookup(&va);
 
         if (tsp != 0) {
                 delta = bpf_ktime_get_ns() - *tsp;
                 dist.increment(bpf_log2l(delta));
-                start.delete((unsigned int *)args->pasid);
+                start.delete(&va);
         }
 
         return 0;
