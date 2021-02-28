@@ -30,6 +30,9 @@ b = BPF(text="""
 BPF_HASH(start, u64);
 BPF_HISTOGRAM(dist);
 
+BPF_HASH(cpu_start, u64);
+BPF_HISTOGRAM(cpu_dist);
+
 TRACEPOINT_PROBE(smmu, io_fault_entry)
 {
         u64 ts;
@@ -56,6 +59,33 @@ TRACEPOINT_PROBE(smmu, io_fault_exit)
 
         return 0;
 }
+
+TRACEPOINT_PROBE(smmu, cpu_fault_entry)
+{
+        u64 ts;
+	u64 va = args->va;
+
+	ts = bpf_ktime_get_ns();
+        cpu_start.update(&va, &ts);
+
+        return 0;
+}
+
+TRACEPOINT_PROBE(smmu, cpu_fault_exit)
+{
+        u64 *tsp, delta;
+	u64 va = args->va;
+
+        tsp = cpu_start.lookup(&va);
+
+        if (tsp != 0) {
+                delta = bpf_ktime_get_ns() - *tsp;
+                cpu_dist.increment(bpf_log2l(delta));
+                cpu_start.delete(&va);
+        }
+
+        return 0;
+}
 """)
 
 # header
@@ -74,8 +104,13 @@ while (1):
         except KeyboardInterrupt:
                 pass; do_exit = 1
 
-        print()
+        print("io pf duration dist:")
         b["dist"].print_log2_hist("nsecs")
         b["dist"].clear()
+
+        print("cpu pf duration dist:")
+        b["cpu_dist"].print_log2_hist("nsecs")
+        b["cpu_dist"].clear()
+
         if do_exit:
                 exit()
