@@ -26,6 +26,7 @@ if len(argv) > 1:
 # load BPF program
 b = BPF(text="""
 #include <uapi/linux/ptrace.h>
+#define TARGET_PID 35739
 
 BPF_HASH(start, u64);
 BPF_HISTOGRAM(dist);
@@ -65,8 +66,10 @@ TRACEPOINT_PROBE(smmu, cpu_fault_entry)
         u64 ts;
 	u64 va = args->va;
 
+//	if (bpf_get_current_pid_tgid() == TARGET_PID) {
 	ts = bpf_ktime_get_ns();
         cpu_start.update(&va, &ts);
+//	}
 
         return 0;
 }
@@ -76,6 +79,8 @@ TRACEPOINT_PROBE(smmu, cpu_fault_exit)
         u64 *tsp, delta;
 	u64 va = args->va;
 
+//	if (bpf_get_current_pid_tgid() == TARGET_PID) {
+
         tsp = cpu_start.lookup(&va);
 
         if (tsp != 0) {
@@ -83,6 +88,7 @@ TRACEPOINT_PROBE(smmu, cpu_fault_exit)
                 cpu_dist.increment(bpf_log2l(delta));
                 cpu_start.delete(&va);
         }
+//	}
 
         return 0;
 }
