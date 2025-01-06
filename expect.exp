@@ -1,0 +1,28 @@
+#!/usr/bin/expect -f
+
+# 需要有这个，增加timeout时间？
+set timeout -1
+
+spawn ../build/qemu-system-aarch64 \
+	-smp 8,maxcpus=8,sockets=1,clusters=2,cores=2,threads=2 \
+	-cpu max  \
+	-machine virt,nvdimm=on \
+ 	-append "console=ttyAMA0 nokaslr" \
+	-display none \
+	-m 4096m,slots=5,maxmem=20G \
+	-kernel /home/sherlock/repos/linux/arch/arm64/boot/Image \
+	-initrd /home/sherlock/repos/buildroot/output/images/rootfs.cpio.gz \
+	-serial stdio
+expect "buildroot login:"
+send "root\n"
+expect "#"
+send "echo 1\n"
+expect "#"
+send "echo test-wang\n"
+
+#expect << EOF
+#	spawn ./arm_run_simple.sh
+#	expect "buildroot login:" {send "root\r"}
+#	expect "#"  		  {send "ls\r"}
+#	expect eof
+#EOF
